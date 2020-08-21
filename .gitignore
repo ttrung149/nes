@@ -1,6 +1,10 @@
 # macos
 .DS_Store
 
+# Binaries
+nes
+test-driver
+
 # Prerequisites
 *.d
 
