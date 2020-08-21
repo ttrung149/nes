@@ -9,7 +9,9 @@ cpu6502::cpu6502() :
 
 cpu6502::~cpu6502() {}
 
-/* Main bus connection  */
+/*=============================================================================
+ * MAIN BUS CONNECTION 
+ *===========================================================================*/
 void cpu6502::connect_to_bus(Bus *b) {
     bus = b;
 }
@@ -20,6 +22,9 @@ void cpu6502::write_to_bus(uint16_t addr, uint8_t data) {
     bus->write(addr, data);
 }
 
+/*=============================================================================
+ * 6502 CPU INTERNAL STATE METHODS 
+ *===========================================================================*/
 // Flags getters
 uint8_t cpu6502::get_flag(flags f) {
 	return ((status & f) > 0) ? 0x01 : 0x00;
@@ -41,7 +46,7 @@ void cpu6502::clock() {
 		pc++;
 		_remaining_cycles = instructions_table[_opcode].cycles;
 
-		// Fetches intermmediate data with proper addressing mode, execute instruction
+		// Fetches data with proper addressing mode and executes instruction
 		uint8_t add_cycle_1 = (this->*instructions_table[_opcode].addr_mode)();
 		uint8_t add_cycle_2 = (this->*instructions_table[_opcode].operate)();
 
@@ -61,22 +66,76 @@ void cpu6502::reset() {
 	uint16_t hi = read_from_bus(_addr_abs + 1);
 	pc = (hi << 8) | lo;
 
-	a = 0; x = 0; y = 0;
+	a = 0x00; x = 0x00; y = 0x00;
 	stkp = RESET_STKP; status = 0x00 | U;
 
 	_addr_rel = 0x0000; _addr_abs = 0x0000; _fetched = 0x00;
 	_remaining_cycles = 8;
 }
 
+/* Interrupt request */
 void cpu6502::irq() {
+    if (get_flag(I) == 0) {
+        // Push program counter onto the stack
+		write_to_bus(BASE_STKP + stkp, (pc >> 8) & 0x00FF);
+		stkp--;
+		write_to_bus(BASE_STKP + stkp, pc & 0x00FF);
+		stkp--;
 
+		// Push status register onto the stack 
+		set_flag(U, true);
+		set_flag(I, true);
+		set_flag(B, false);
+
+		write_to_bus(BASE_STKP + stkp, status);
+		stkp--;
+
+		// Read new program counter at (pre-programmed) IRQ_PC 
+		_addr_abs = IRQ_PC;
+		uint16_t lo = read_from_bus(_addr_abs);
+		uint16_t hi = read_from_bus(_addr_abs + 1);
+		pc = (hi << 8) | lo;
+
+		_remaining_cycles = 7;
+	}
 }
 
+/* Non-maskable interrupt request */
 void cpu6502::nmi() {
+    // Push program counter onto the stack
+    write_to_bus(BASE_STKP + stkp, (pc >> 8) & 0x00FF);
+	stkp--;
+	write_to_bus(BASE_STKP + stkp, pc & 0x00FF);
+	stkp--;
 
+	// Push status register onto the stack 
+	set_flag(U, true);
+	set_flag(I, true);
+	set_flag(B, false);
+
+	write_to_bus(BASE_STKP + stkp, status);
+	stkp--;
+
+	// Read new program counter at (pre-programmed) NMI_PC 
+	_addr_abs = NMI_PC;
+	uint16_t lo = read_from_bus(_addr_abs);
+	uint16_t hi = read_from_bus(_addr_abs + 1);
+	pc = (hi << 8) | lo;
+
+	_remaining_cycles = 8;
 }
 
+/* Populates the '_fetched' attribute */
+uint8_t cpu6502::fetch() {
+    if (!(instructions_table[_opcode].addr_mode == &cpu6502::IMP)) {
+		_fetched = read_from_bus(_addr_abs);
+    }
+	return _fetched;
+}
 
+/*=============================================================================
+ * ADDRESSING MODES 
+ *===========================================================================*/
 uint8_t cpu6502::IMP() { return 0; }
 uint8_t cpu6502::IMM() { return 0; } 
 uint8_t cpu6502::ZP0() { return 0; }
@@ -90,6 +149,9 @@ uint8_t cpu6502::IND() { return 0; }
 uint8_t cpu6502::IZX() { return 0; }
 uint8_t cpu6502::IZY() { return 0; }
 
+/*=============================================================================
+ * INSTRUCTIONS 
+ *===========================================================================*/
 uint8_t cpu6502::ADC() { return 0; }
 uint8_t cpu6502::AND() { return 0; } 
 uint8_t cpu6502::ASL() { return 0; }
