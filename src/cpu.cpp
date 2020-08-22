@@ -214,9 +214,45 @@ uint8_t cpu6502::ABY() {
 	return ((_addr_abs & 0xFF00) != (hi << 8)) ? 1 : 0;
 }
 
-uint8_t cpu6502::IND() { return 0; }
-uint8_t cpu6502::IZX() { return 0; }
-uint8_t cpu6502::IZY() { return 0; }
+uint8_t cpu6502::IND() {
+    uint16_t lo = read_from_bus(pc);
+	pc++;
+	uint16_t hi = read_from_bus(pc);
+	pc++;
+
+	uint16_t ptr = (hi << 8) | lo;
+	if (lo == 0x00FF)
+		_addr_abs = (read_from_bus(ptr & 0xFF00) << 8) | read_from_bus(ptr);
+	else
+		_addr_abs = (read_from_bus(ptr + 1) << 8) | read_from_bus(ptr);
+
+	return 0;
+}
+
+uint8_t cpu6502::IZX() {
+    uint16_t t = read_from_bus(pc);
+	pc++;
+
+	uint16_t lo = read_from_bus((uint16_t)(t + (uint16_t)x) & 0x00FF);
+	uint16_t hi = read_from_bus((uint16_t)(t + (uint16_t)x + 1) & 0x00FF);
+
+	_addr_abs = (hi << 8) | lo;
+
+	return 0;
+}
+
+uint8_t cpu6502::IZY() {
+    uint16_t t = read_from_bus(pc);
+	pc++;
+
+	uint16_t lo = read_from_bus(t & 0x00FF);
+	uint16_t hi = read_from_bus((t + 1) & 0x00FF);
+
+	_addr_abs = ((hi << 8) | lo) + y;
+
+    // Additional clock cycles if absolute address crosses pages
+	return ((_addr_abs & 0xFF00) != (hi << 8)) ? 1 : 0;
+}
 
 /*=============================================================================
  * INSTRUCTIONS 
