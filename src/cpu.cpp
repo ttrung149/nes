@@ -7,7 +7,7 @@ cpu6502::cpu6502() :
     _fetched(0), _temp(0), _addr_abs(0), _addr_rel(0), _opcode(0), _remaining_cycles(0),
     _clock_count(0) {}
 
-cpu6502::~cpu6502() {}
+cpu6502::~cpu6502() { (void) _temp; }
 
 /*=============================================================================
  * MAIN BUS CONNECTION 
@@ -16,9 +16,11 @@ void cpu6502::connect_to_bus(Bus *b) {
     bus = b;
 }
 uint8_t cpu6502::read_from_bus(uint16_t addr) {
+    assert(bus != nullptr);
     return bus->read(addr, false);
 }
 void cpu6502::write_to_bus(uint16_t addr, uint8_t data) {
+    assert(bus != nullptr);
     bus->write(addr, data);
 }
 
@@ -136,16 +138,83 @@ uint8_t cpu6502::fetch() {
 /*=============================================================================
  * ADDRESSING MODES 
  *===========================================================================*/
-uint8_t cpu6502::IMP() { return 0; }
-uint8_t cpu6502::IMM() { return 0; } 
-uint8_t cpu6502::ZP0() { return 0; }
-uint8_t cpu6502::ZPX() { return 0; }
-uint8_t cpu6502::ZPY() { return 0; }
-uint8_t cpu6502::REL() { return 0; }
-uint8_t cpu6502::ABS() { return 0; }
-uint8_t cpu6502::ABX() { return 0; }	
-uint8_t cpu6502::ABY() { return 0; }
-uint8_t cpu6502::IND() { return 0; }	
+uint8_t cpu6502::IMP() {
+    _fetched = a;
+    return 0;
+}
+
+uint8_t cpu6502::IMM() {
+    _addr_abs = pc++;
+    return 0;
+}
+
+uint8_t cpu6502::ZP0() {
+    _addr_abs = read_from_bus(pc);
+	pc++;
+	_addr_abs &= 0x00FF;
+	return 0;
+}
+
+uint8_t cpu6502::ZPX() {
+    _addr_abs = read_from_bus(pc) + x;
+	pc++;
+	_addr_abs &= 0x00FF;
+	return 0;
+}
+
+uint8_t cpu6502::ZPY() {
+    _addr_abs = read_from_bus(pc) + y;
+	pc++;
+	_addr_abs &= 0x00FF;
+	return 0;
+}
+
+uint8_t cpu6502::REL() {
+	_addr_rel = read_from_bus(pc);
+	pc++;
+
+    // Handles negative _addr_rel case
+	if (_addr_rel & 0x80) _addr_rel |= 0xFF00;
+	return 0;
+}
+
+uint8_t cpu6502::ABS() {
+	uint16_t lo = read_from_bus(pc);
+	pc++;
+	uint16_t hi = read_from_bus(pc);
+	pc++;
+
+	_addr_abs = (hi << 8) | lo;
+	return 0;
+}
+
+uint8_t cpu6502::ABX() {
+	uint16_t lo = read_from_bus(pc);
+	pc++;
+	uint16_t hi = read_from_bus(pc);
+	pc++;
+
+	_addr_abs = (hi << 8) | lo;
+	_addr_abs += x;
+
+    // Additional clock cycles if absolute address crosses pages
+	return ((_addr_abs & 0xFF00) != (hi << 8)) ? 1 : 0;
+}
+
+uint8_t cpu6502::ABY() {
+	uint16_t lo = read_from_bus(pc);
+	pc++;
+	uint16_t hi = read_from_bus(pc);
+	pc++;
+
+	_addr_abs = (hi << 8) | lo;
+	_addr_abs += y;
+
+    // Additional clock cycles if absolute address crosses pages
+	return ((_addr_abs & 0xFF00) != (hi << 8)) ? 1 : 0;
+}
+
+uint8_t cpu6502::IND() { return 0; }
 uint8_t cpu6502::IZX() { return 0; }
 uint8_t cpu6502::IZY() { return 0; }
 

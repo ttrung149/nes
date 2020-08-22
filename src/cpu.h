@@ -1,6 +1,7 @@
 #include <inttypes.h>
 #include <vector>
 #include <string>
+#include <assert.h>
 
 #ifndef CPU_6502_
 #define CPU_6502_
@@ -24,7 +25,7 @@ public:
 
 // 6502 CPU's internal state attributes
 public:
-    enum flags {
+    enum flags : uint8_t {
 		C = (0x1 << 0),	                // Carry bit
 		Z = (0x1 << 1),	                // Zero
 		I = (0x1 << 2),	                // Disable interrupts
