@@ -258,18 +258,132 @@ uint8_t cpu6502::IZY() {
  * INSTRUCTIONS 
  *===========================================================================*/
 uint8_t cpu6502::ADC() { return 0; }
-uint8_t cpu6502::AND() { return 0; } 
+
+uint8_t cpu6502::AND() {
+    fetch();
+	a = a & _fetched;
+	set_flag(Z, a == 0x00);
+	set_flag(N, a & 0x80);
+	return 1;
+}
+
 uint8_t cpu6502::ASL() { return 0; }
-uint8_t cpu6502::BCC() { return 0; }
-uint8_t cpu6502::BCS() { return 0; }
-uint8_t cpu6502::BEQ() { return 0; }
-uint8_t cpu6502::BIT() { return 0; }
-uint8_t cpu6502::BMI() { return 0; }
-uint8_t cpu6502::BNE() { return 0; }
-uint8_t cpu6502::BPL() { return 0; }
+
+uint8_t cpu6502::BCC() {
+    if (get_flag(C) == 0) {
+		_remaining_cycles++;
+		_addr_abs = pc + _addr_rel;
+
+		if((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
+uint8_t cpu6502::BCS() {
+    if (get_flag(C) == 1) {
+		_remaining_cycles++;
+		_addr_abs = pc + _addr_rel;
+
+		if ((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
+uint8_t cpu6502::BEQ() {
+    if (get_flag(Z) == 1) {
+		_remaining_cycles++;
+        _addr_abs = pc + _addr_rel;
+
+		if ((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
+uint8_t cpu6502::BIT() {
+    fetch();
+	_temp = a & _fetched;
+    set_flag(Z, (_temp & 0x00FF) == 0x00);
+	set_flag(N, _fetched & (0x1 << 7));
+	set_flag(V, _fetched & (0x1 << 6));
+	return 0;
+}
+
+uint8_t cpu6502::BMI() {
+	if (get_flag(N) == 1) {
+		_remaining_cycles++;
+		_addr_abs = pc + _addr_rel;
+
+		if ((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
+uint8_t cpu6502::BNE() {
+	if (get_flag(Z) == 0) {
+		_remaining_cycles++;
+        _addr_abs = pc + _addr_rel;
+
+		if ((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
+uint8_t cpu6502::BPL() {
+	if (get_flag(N) == 0) {
+		_remaining_cycles++;
+		_addr_abs = pc + _addr_rel;
+
+		if ((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
 uint8_t cpu6502::BRK() { return 0; }
-uint8_t cpu6502::BVC() { return 0; }
-uint8_t cpu6502::BVS() { return 0; }
+
+uint8_t cpu6502::BVC() {
+	if (get_flag(V) == 0) {
+        _remaining_cycles++;
+		_addr_abs = pc + _addr_rel;
+
+		if ((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
+uint8_t cpu6502::BVS() {
+	if (get_flag(V) == 1) {
+        _remaining_cycles++;
+		_addr_abs = pc + _addr_rel;
+
+		if ((_addr_abs & 0xFF00) != (pc & 0xFF00))
+			_remaining_cycles++;
+
+		pc = _addr_abs;
+	}
+	return 0;
+}
+
 uint8_t cpu6502::CLC() { return 0; }
 uint8_t cpu6502::CLD() { return 0; }
 uint8_t cpu6502::CLI() { return 0; }
@@ -290,7 +404,20 @@ uint8_t cpu6502::LDA() { return 0; }
 uint8_t cpu6502::LDX() { return 0; }
 uint8_t cpu6502::LDY() { return 0; }
 uint8_t cpu6502::LSR() { return 0; }
-uint8_t cpu6502::NOP() { return 0; }
+
+uint8_t cpu6502::NOP() {
+    switch (_opcode) {
+        case 0x1C:
+        case 0x3C:
+        case 0x5C:
+        case 0x7C:
+        case 0xDC:
+        case 0xFC: return 1; break;
+        default: break;
+	}
+	return 0;
+}
+
 uint8_t cpu6502::ORA() { return 0; }
 uint8_t cpu6502::PHA() { return 0; }
 uint8_t cpu6502::PHP() { return 0; }
