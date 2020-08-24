@@ -6,7 +6,7 @@
 CXX         = g++
 CFLAGS      = -g -std=c++11 -pedantic -Wall -Werror -Wextra \
               -Wno-overlength-strings -Wfatal-errors -pedantic
-LDFLAGS     = -lSDL2
+LDFLAGS     = -lSDL2 -lSDL2_ttf
 RM          = rm -rf
 
 # Binary name
