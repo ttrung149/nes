@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+#include <map>
 
 #include "cpu.h"
 #include "bus.h"
@@ -31,25 +32,22 @@ public:
     void begin();
     void stop();
 
-// GUI display helper functions
-private:
-    void _init_gui(MODE m);
-
-private:
-    void _init_display_disassembler();
-    void _display_disassembler();
-
-private:
-    void _init_display_mem_seg();
-    void _display_mem_seg();
-
 //-----------------------------------------------------------------------------
 // Debugging GUI
 //-----------------------------------------------------------------------------
 private:
-    std::string _hex_str(uint32_t num, uint8_t num_half_bytes);
     void _render_str(const std::string &str, TTF_Font *font,
                                         const SDL_Color &col, SDL_Rect &bound);
+
+// GUI helper: Disassembler output display
+private:
+    TTF_Font *disasm_font;
+    SDL_Rect disasm_instr_rects[27];
+
+    std::map<uint16_t, std::string>_disasm_instr_map;
+    void _init_disasm_renderer();
+    void _render_disasm();
+
 // GUI helper: Registers display
 private:
     TTF_Font *regs_font;
@@ -63,12 +61,8 @@ private:
     TTF_Font *flags_font;
     SDL_Rect flags_rects[8];
 
-    SDL_Texture *set_flags_textures[8];
-    SDL_Texture *unset_flags_textures[8];
-
     void _init_flags_renderer();
     void _render_flags();
-    void _destroy_flags_renderer();
 };
 
 #endif
