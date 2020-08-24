@@ -136,6 +136,99 @@ uint8_t cpu6502::fetch() {
 }
 
 /*=============================================================================
+ * UTILS FUNCTIONS
+ *===========================================================================*/
+std::string cpu6502::hex_str(uint32_t num, uint8_t num_half_bytes) {
+    std::string str(num_half_bytes, '0');
+    for (int i = num_half_bytes - 1; i >= 0; i--, num >>= 4)
+        str[i] = "0123456789ABCDEF"[num & 0xF];
+    return str;
+}
+
+/* Disassembler routine - huge creds to javidx9 */
+std::map<uint16_t, std::string> cpu6502::disasm(uint16_t begin, uint16_t end) {
+    uint32_t addr = begin;
+    uint8_t value = 0x00, lo = 0x00, hi = 0x00;
+    std::map<uint16_t, std::string> disasm_ouput;
+    uint16_t line_addr = 0;
+
+    while (addr <= (uint32_t)end) {
+        line_addr = addr;
+        std::string instruction_str = "$" + hex_str(addr, 4) + ": ";
+
+        uint8_t opcode = bus->read(addr, true);
+        addr++;
+        instruction_str += instructions_table[opcode].pneumonic + " ";
+
+        if (instructions_table[opcode].addr_mode == &cpu6502::IMP) {
+            instruction_str += " {IMP}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::IMM) {
+            value = bus->read(addr, true);
+            addr++;
+            instruction_str += "#$" + hex_str(value, 2) + " {IMM}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::ZP0) {
+            lo = bus->read(addr, true);
+            addr++;
+            hi = 0x00;
+            instruction_str += "$" + hex_str(lo, 2) + " {ZP0}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::ZPX) {
+            lo = bus->read(addr, true); addr++;
+            hi = 0x00;
+            instruction_str += "$" + hex_str(lo, 2) + ", X {ZPX}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::ZPY) {
+            lo = bus->read(addr, true); addr++;
+            hi = 0x00;
+            instruction_str += "$" + hex_str(lo, 2) + ", Y {ZPY}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::REL) {
+            value = bus->read(addr, true); addr++;
+            instruction_str += "$" + hex_str(value, 2) + " [$" + hex_str(addr + (int8_t)value, 4) + "] {REL}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::ABS) {
+            lo = bus->read(addr, true); addr++;
+            hi = bus->read(addr, true); addr++;
+            instruction_str += "$" + hex_str((uint16_t)(hi << 8) | lo, 4) + " {ABS}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::ABX) {
+            lo = bus->read(addr, true); addr++;
+            hi = bus->read(addr, true); addr++;
+            instruction_str += "$" + hex_str((uint16_t)(hi << 8) | lo, 4) + ", X {ABX}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::ABY) {
+            lo = bus->read(addr, true); addr++;
+            hi = bus->read(addr, true); addr++;
+            instruction_str += "$" + hex_str((uint16_t)(hi << 8) | lo, 4) + ", Y {ABY}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::IND) {
+            lo = bus->read(addr, true); addr++;
+            hi = bus->read(addr, true); addr++;
+            instruction_str += "($" + hex_str((uint16_t)(hi << 8) | lo, 4) + ") {IND}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::IZX) {
+            lo = bus->read(addr, true); addr++;
+            hi = 0x00;
+            instruction_str += "($" + hex_str(lo, 2) + ", X) {IZX}";
+        }
+        else if (instructions_table[opcode].addr_mode == &cpu6502::IZY) {
+            lo = bus->read(addr, true); addr++;
+            hi = 0x00;
+            instruction_str += "($" + hex_str(lo, 2) + "), Y {IZY}";
+        }
+        else {
+            instruction_str += "ILLEGAL ADDRESSING MODE";
+        }
+
+        disasm_ouput[line_addr] = instruction_str;
+    }
+
+    return disasm_ouput;
+}
+
+/*=============================================================================
  * ADDRESSING MODES
  *===========================================================================*/
 uint8_t cpu6502::IMP() {
@@ -554,3 +647,5 @@ uint8_t cpu6502::TXS() { return 0; }
 uint8_t cpu6502::TYA() { return 0; }
 
 uint8_t cpu6502::XXX() { return 0; }
+
+bool cpu6502::instr_completed() { return _remaining_cycles == 0; }

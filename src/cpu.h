@@ -1,7 +1,7 @@
 #include <inttypes.h>
 #include <vector>
+#include <map>
 #include <string>
-#include <assert.h>
 
 #ifndef CPU_6502_
 #define CPU_6502_
@@ -105,6 +105,12 @@ private:
 	uint8_t TSX();	uint8_t TXA();	uint8_t TXS();	uint8_t TYA();
 
 	uint8_t XXX(); // no-op
+
+public:
+    static std::string hex_str(uint32_t num, uint8_t num_half_bytes);
+    std::map<uint16_t, std::string> disasm(uint16_t begin, uint16_t end);
+
+    bool instr_completed();
 };
 
 #endif
