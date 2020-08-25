@@ -42,7 +42,6 @@ void cpu6502::clock() {
     if (_remaining_cycles == 0) {
         // Get opcode for next instruction
         _opcode = read_from_bus(pc);
-        set_flag(U, true);
 
         // Increment program counter
         pc++;
@@ -54,6 +53,8 @@ void cpu6502::clock() {
 
         // Add additional clock cycles (if exists)
         _remaining_cycles += (add_cycle_1 & add_cycle_2);
+
+        // Unused flag
         set_flag(U, true);
     }
 
@@ -152,13 +153,14 @@ std::map<uint16_t, std::string> cpu6502::disasm(uint16_t begin, uint16_t end) {
     std::map<uint16_t, std::string> disasm_ouput;
     uint16_t line_addr = 0;
 
+    assert(bus);
     while (addr <= (uint32_t)end) {
         line_addr = addr;
-        std::string instruction_str = "$" + hex_str(addr, 4) + ": ";
+        std::string instruction_str = "$" + hex_str(addr, 4) + ":  ";
 
         uint8_t opcode = bus->read(addr, true);
         addr++;
-        instruction_str += instructions_table[opcode].pneumonic + " ";
+        instruction_str += instructions_table[opcode].mnemonic + " ";
 
         if (instructions_table[opcode].addr_mode == &cpu6502::IMP) {
             instruction_str += " {IMP}";
@@ -350,7 +352,19 @@ uint8_t cpu6502::IZY() {
 /*=============================================================================
  * INSTRUCTIONS
  *===========================================================================*/
-uint8_t cpu6502::ADC() { return 0; }
+uint8_t cpu6502::ADC() {
+    fetch();
+    _temp = (uint16_t)a + (uint16_t)_fetched + (uint16_t)get_flag(C);
+
+    set_flag(C, _temp > 255);
+    set_flag(Z, (_temp & 0x00FF) == 0);
+    set_flag(V, (~((uint16_t)a ^ (uint16_t)_fetched) &
+                                    ((uint16_t)a ^ (uint16_t)_temp)) & 0x0080);
+    set_flag(N, _temp & 0x80);
+    a = _temp & 0x00FF;
+
+    return 1;
+}
 
 uint8_t cpu6502::AND() {
     fetch();
@@ -461,7 +475,24 @@ uint8_t cpu6502::BPL() {
     return 0;
 }
 
-uint8_t cpu6502::BRK() { return 0; }
+uint8_t cpu6502::BRK() {
+    pc++;
+
+    write_to_bus(BASE_STKP + stkp, (pc >> 8) & 0x00FF);
+    stkp--;
+    write_to_bus(BASE_STKP + stkp, pc & 0x00FF);
+    stkp--;
+
+    set_flag(I, true);
+    set_flag(B, true);
+    write_to_bus(BASE_STKP + stkp, status);
+    stkp--;
+
+    set_flag(B, false);
+    pc = (uint16_t)read_from_bus(0xFFFE) | ((uint16_t)read_from_bus(0xFFFF) << 8);
+
+    return 0;
+}
 
 uint8_t cpu6502::BVC() {
     if (get_flag(V) == 0) {
@@ -623,28 +654,130 @@ uint8_t cpu6502::NOP() {
     return 0;
 }
 
-uint8_t cpu6502::ORA() { return 0; }
-uint8_t cpu6502::PHA() { return 0; }
-uint8_t cpu6502::PHP() { return 0; }
-uint8_t cpu6502::PLA() { return 0; }
-uint8_t cpu6502::PLP() { return 0; }
-uint8_t cpu6502::ROL() { return 0; }
-uint8_t cpu6502::ROR() { return 0; }
-uint8_t cpu6502::RTI() { return 0; }
-uint8_t cpu6502::RTS() { return 0; }
-uint8_t cpu6502::SBC() { return 0; }
-uint8_t cpu6502::SEC() { return 0; }
-uint8_t cpu6502::SED() { return 0; }
-uint8_t cpu6502::SEI() { return 0; }
-uint8_t cpu6502::STA() { return 0; }
-uint8_t cpu6502::STX() { return 0; }
-uint8_t cpu6502::STY() { return 0; }
-uint8_t cpu6502::TAX() { return 0; }
-uint8_t cpu6502::TAY() { return 0; }
-uint8_t cpu6502::TSX() { return 0; }
-uint8_t cpu6502::TXA() { return 0; }
-uint8_t cpu6502::TXS() { return 0; }
-uint8_t cpu6502::TYA() { return 0; }
+uint8_t cpu6502::ORA() {
+    fetch();
+    a |= _fetched;
+    set_flag(Z, a == 0x00);
+    set_flag(N, a & 0x80);
+    return 1;
+}
+
+uint8_t cpu6502::PHA() {
+    write_to_bus(BASE_STKP + stkp, a);
+    stkp--;
+    return 0;
+}
+
+uint8_t cpu6502::PHP() {
+    write_to_bus(BASE_STKP + stkp, status | B | U);
+    set_flag(B, false);
+    set_flag(U, false);
+    stkp--;
+    return 0;
+}
+
+uint8_t cpu6502::PLA() {
+    stkp++;
+    a = read_from_bus(BASE_STKP + stkp);
+    set_flag(Z, a == 0x00);
+    set_flag(N, a & 0x80);
+    return 0;
+}
+
+uint8_t cpu6502::PLP() {
+    stkp++;
+    status = read_from_bus(BASE_STKP + stkp);
+    set_flag(U, 1);
+    return 0;
+}
+
+uint8_t cpu6502::ROL() {
+    fetch();
+
+    _temp = (uint16_t)(_fetched << 1) | get_flag(C);
+    set_flag(N, _temp & 0x0080);
+    set_flag(Z, (_temp & 0x00FF) == 0x0000);
+    set_flag(C, _temp & 0xFF00);
+    if (instructions_table[_opcode].addr_mode == &cpu6502::IMP)
+        a = _temp & 0x00FF;
+    else
+        write_to_bus(_addr_abs, _temp & 0x00FF);
+    return 0;
+}
+
+uint8_t cpu6502::ROR() {
+    fetch();
+    _temp = (uint16_t)(get_flag(C) << 7) | (_fetched >> 1);
+    set_flag(N, _temp & 0x0080);
+    set_flag(Z, (_temp & 0x00FF) == 0x00);
+    set_flag(C, _fetched & 0x01);
+    if (instructions_table[_opcode].addr_mode == &cpu6502::IMP)
+        a = _temp & 0x00FF;
+    else
+        write_to_bus(_addr_abs, _temp & 0x00FF);
+    return 0;
+}
+
+uint8_t cpu6502::RTI() {
+    stkp++;
+    status = read_from_bus(BASE_STKP + stkp);
+    status &= ~U;
+    status &= ~B;
+
+    stkp++;
+    pc = (uint16_t)read_from_bus(BASE_STKP + stkp);
+    stkp++;
+    pc |= (uint16_t)read_from_bus(BASE_STKP + stkp) << 8;
+    return 0;
+}
+
+uint8_t cpu6502::RTS() {
+    stkp++;
+    pc = (uint16_t)read_from_bus(0x0100 + stkp);
+    stkp++;
+    pc |= (uint16_t)read_from_bus(0x0100 + stkp) << 8;
+
+    pc++;
+    return 0;
+}
+
+uint8_t cpu6502::SBC() {
+    fetch();
+    uint16_t val = ((uint16_t)_fetched) ^ 0x00FF;
+    _temp = (uint16_t)a + val + (uint16_t)get_flag(C);
+
+    set_flag(C, _temp & 0xFF00);
+    set_flag(Z, ((_temp & 0x00FF) == 0));
+    set_flag(V, (_temp ^ (uint16_t)a) & (_temp ^ val) & 0x0080);
+    set_flag(N, _temp & 0x0080);
+
+    a = _temp & 0x00FF;
+    return 1;
+}
+
+uint8_t cpu6502::SEC() { set_flag(C, true); return 0; }
+
+uint8_t cpu6502::SED() { set_flag(D, true); return 0; }
+
+uint8_t cpu6502::SEI() { set_flag(I, true); return 0; }
+
+uint8_t cpu6502::STA() { write_to_bus(_addr_abs, a); return 0; }
+
+uint8_t cpu6502::STX() { write_to_bus(_addr_abs, x); return 0; }
+
+uint8_t cpu6502::STY() { write_to_bus(_addr_abs, y); return 0; }
+
+uint8_t cpu6502::TAX() { x = a; set_flag(Z, x == 0x00); set_flag(N, x & 0x80); return 0; }
+
+uint8_t cpu6502::TAY() { y = a; set_flag(Z, y == 0x00); set_flag(N, y & 0x80); return 0; }
+
+uint8_t cpu6502::TSX() { x = stkp; set_flag(Z, x == 0x00); set_flag(N, x & 0x80); return 0; }
+
+uint8_t cpu6502::TXA() { a = x; set_flag(Z, a == 0x00); set_flag(N, a & 0x80); return 0; }
+
+uint8_t cpu6502::TXS() { stkp = x; return 0; }
+
+uint8_t cpu6502::TYA() { a = y; set_flag(Z, a == 0x00); set_flag(N, a & 0x80); return 0; }
 
 uint8_t cpu6502::XXX() { return 0; }
 

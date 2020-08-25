@@ -79,7 +79,7 @@ private:
 // Opcodes for 6502 instructions 
 private:
     struct Instruction {
-		std::string pneumonic;
+		std::string mnemonic;
 		uint8_t (cpu6502::*operate  ) (void);
 		uint8_t (cpu6502::*addr_mode) (void);
 		uint8_t cycles;
