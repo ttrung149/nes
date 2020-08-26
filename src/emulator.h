@@ -1,3 +1,6 @@
+#ifndef EMULATOR_H_
+#define EMULATOR_H_
+
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -5,9 +8,6 @@
 
 #include "cpu.h"
 #include "bus.h"
-
-#ifndef EMULATOR_H_
-#define EMULATOR_H_
 
 class Emulator {
 public:

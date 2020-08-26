@@ -1,10 +1,10 @@
+#ifndef CPU_6502_
+#define CPU_6502_
+
 #include <inttypes.h>
 #include <vector>
 #include <map>
 #include <string>
-
-#ifndef CPU_6502_
-#define CPU_6502_
 
 // Forward-declaration for class 'Bus' defined in 'bus.cpp'
 class Bus;
