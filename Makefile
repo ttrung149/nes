@@ -16,9 +16,11 @@ BIN         = nes
 OBJ_DIR     = obj
 
 # Source file directory
-SRC_DIR 	= $(shell pwd)/src
+SRC_DIR     = $(shell pwd)/src
+MAPPER_DIR  = $(shell pwd)/mappers
+MAPPERS_F   = $(wildcard mappers/*.cpp)
 SRC_FILES   = $(wildcard src/*.cpp)
-OBJ_FILES   = $(addprefix obj/,$(notdir $(SRC_FILES:.cpp=.o)))
+OBJ_FILES   = $(addprefix obj/,$(notdir $(SRC_FILES:.cpp=.o) $(MAPPERS_F:.cpp=.o)))
 DEPENDS     = $(wildcard obj/*d)
 
 #------------------------------------------------------------------------------
@@ -34,7 +36,10 @@ $(OBJ_DIR):
 	mkdir -p obj
 
 obj/%.o: src/%.cpp
-	$(CXX) $(CFLAGS) -c -MMD -MP -o $@ $<
+	$(CXX) $(CFLAGS) -I $(MAPPER_DIR) -c -MMD -MP -o $@ $<
+
+obj/%.o: mappers/%.cpp
+	$(CXX) $(CFLAGS) -I $(SRC_DIR) -c -MMD -MP -o $@ $<
 
 $(BIN): $(OBJ_FILES)
 	$(CXX) $(LDFLAGS) -o $@ $^
