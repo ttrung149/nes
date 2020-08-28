@@ -9,10 +9,11 @@ public:
     ~Mapper_0();
 
 public:
-    bool cpu_mapped_read(uint16_t addr, uint32_t &mapped_addr) override;
-    bool cpu_mapped_write(uint16_t addr, uint32_t &mapped_addr) override;
-    bool ppu_mapped_read(uint16_t addr, uint32_t &mapped_addr) override;
-    bool ppu_mapped_write(uint16_t addr, uint32_t &mapped_addr) override;
+    bool get_cpu_read_mapped_addr(uint16_t addr, uint16_t  &mapped_addr) override;
+    bool get_cpu_write_mapped_addr(uint16_t addr, uint16_t &mapped_addr) override;
+
+    bool get_ppu_read_mapped_addr(uint16_t addr, uint16_t &mapped_addr) override;
+    bool get_ppu_write_mapped_addr(uint16_t addr, uint16_t &mapped_addr) override;
 };
 
 #endif
