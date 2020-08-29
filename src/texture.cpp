@@ -17,7 +17,7 @@ Texture::~Texture() { assert(texture); SDL_DestroyTexture(texture); }
 void Texture::update_texture(uint16_t idx, uint8_t r, uint8_t g, uint8_t b) {
     assert(idx < width * height);
 
-    pixels_arr[(idx << 2)    ] = r;
+    pixels_arr[(idx << 2)]     = r;
     pixels_arr[(idx << 2) + 1] = g;
     pixels_arr[(idx << 2) + 2] = b;
     pixels_arr[(idx << 2) + 3] = SDL_ALPHA_OPAQUE;

@@ -1,65 +1,73 @@
-#include <sstream>
-
 #include "emulator.h"
 
-/* Constants */
 #define OPEN_SANS_FONT_DIR "utils/open-sans.ttf"
 
-#define VIDEO_WIDTH 760
+/* NES resolution */
+#define NES_WINDOW_WIDTH 256
+#define NES_WINDOW_HEIGHT 240
+
+/* GUI resolution */
+#define VIDEO_WIDTH 768
 #define VIDEO_HEIGHT 720
 
-#define DEBUG_WIDTH 1050
+/* GUI size (with debugging display) */
+#define DEBUG_WIDTH 1056
 #define DEBUG_HEIGHT 720
 
-static const char *FLAGS_CHAR[8] = { "N", "V", "U", "B", "D", "I", "Z", "C" };
+static const char *FLAGS_CHAR[8] = { "N", "V", "_", "B", "D", "I", "Z", "C" };
 #define NUM_FLAGS 8
 #define NUM_REGS 5
 #define NUM_DISASM_INSTR 27
+#define CHR_ROM_SIZE 128
 
 static const SDL_Color WHITE = { 255, 255, 255, 100 };
-static const SDL_Color RED   = { 255, 0, 0, 80 };
-static const SDL_Color BLUE  = { 0, 255, 255, 80 };
-static const SDL_Color GREEN = { 0, 255, 0, 80 };
-static const SDL_Color GREY  = { 200, 200, 200, 100 };
+static const SDL_Color GREY  = { 180, 180, 180, 100 };
+static const SDL_Color RED   = { 255, 0, 0, 100 };
+static const SDL_Color BLUE  = { 0, 255, 255, 100 };
+static const SDL_Color GREEN = { 0, 255, 0, 100 };
 
+/*=============================================================================
+ * EMULATOR METHODS
+ *===========================================================================*/
 Emulator::Emulator(Emulator::MODE m) : mode(m) {
-    (void) mode;
 
+    // Create bus connection
     cpu.connect_to_bus(&main_bus);
     main_bus.connect_to_cpu(&cpu);
 
-    std::stringstream ss;
-    ss << "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA";
-    uint16_t offset = 0x8000;
-    while (!ss.eof()) {
-        std::string b;
-        ss >> b;
-        main_bus.cpu_ram[offset++] = (uint8_t)std::stoul(b, nullptr, 16);
-	}
+    ppu.connect_to_bus(&main_bus);
+    main_bus.connect_to_ppu(&ppu);
 
-    // Reset vector
-    main_bus.cpu_ram[0xFFFC] = 0x00;
-    main_bus.cpu_ram[0xFFFD] = 0x80;
+    cartridge = std::make_shared<Cartridge>("roms/nestest.nes");
+    main_bus.connect_to_cartridge(cartridge);
 
     _disasm_instr_map = cpu.disasm(0x0000, 0xFFFF);
     cpu.reset();
 
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_CreateWindowAndRenderer(DEBUG_WIDTH, DEBUG_HEIGHT, 0, &window, &renderer);
-    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 0);
-    SDL_RenderClear(renderer);
 
+    // Create window size based on mode
+    if (mode == DEBUG_MODE)
+        SDL_CreateWindowAndRenderer(DEBUG_WIDTH, DEBUG_HEIGHT, 0, &window, &renderer);
+    else if (mode == NORMAL_MODE)
+        SDL_CreateWindowAndRenderer(VIDEO_WIDTH, VIDEO_HEIGHT, 0, &window, &renderer);
+
+    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 100);
+    SDL_RenderClear(renderer);
     TTF_Init();
 }
 
 Emulator::~Emulator() { stop(); }
 
+/* Begin emulation */
 void Emulator::begin() {
-    _init_flags_renderer();
-    _init_regs_renderer();
-    _init_disasm_renderer();
+    _init_video_renderer();
+
+    if (mode == DEBUG_MODE)
+        _init_debugging_gui_renderer();
 
     assert(renderer);
+    video_text->update_texture(1000, 255, 0, 0);
 
     while (true) {
         SDL_RenderClear(renderer);
@@ -72,10 +80,7 @@ void Emulator::begin() {
                         do { cpu.clock(); } while (!cpu.instr_completed());
                         break;
                     }
-                    case SDL_SCANCODE_R: {
-                        cpu.reset();
-                        break;
-                    }
+                    case SDL_SCANCODE_R: { cpu.reset(); break; }
                     default: break;
                 }
                 break;
@@ -88,11 +93,15 @@ void Emulator::begin() {
         _render_flags();
         _render_regs();
         _render_disasm();
+        _render_chr_rom();
+
+        _render_video();
 
         SDL_RenderPresent(renderer);
     }
 }
 
+/* Stop emulation */
 void Emulator::stop() {
     assert(window);
     assert(renderer);
@@ -101,6 +110,39 @@ void Emulator::stop() {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+}
+
+/*=============================================================================
+ * VIDEO RENDERER
+ *===========================================================================*/
+void Emulator::_init_video_renderer() {
+    video_rect.x = 0;
+    video_rect.y = 0;
+    video_rect.w = VIDEO_WIDTH;
+    video_rect.h = VIDEO_HEIGHT;
+
+    assert(renderer);
+    video_text = std::make_shared<Texture>(renderer,
+                            NES_WINDOW_WIDTH, NES_WINDOW_HEIGHT, video_rect);
+}
+
+void Emulator::_render_video() { video_text->render_texture(); }
+
+/*=============================================================================
+ * DEBUGGING GUI HELPERS
+ *===========================================================================*/
+void Emulator::_init_debugging_gui_renderer() {
+    _init_flags_renderer();
+    _init_regs_renderer();
+    _init_disasm_renderer();
+    _init_chr_rom_renderer();
+}
+
+void Emulator::_render_debugging_gui() {
+    _render_flags();
+    _render_regs();
+    _render_disasm();
+    _render_chr_rom();
 }
 
 void Emulator::_render_str(const std::string &str, TTF_Font *font,
@@ -114,51 +156,74 @@ void Emulator::_render_str(const std::string &str, TTF_Font *font,
     bound.h = surf->h;      // Rezize boundaries box's height
 
     SDL_FreeSurface(surf);
+    assert(renderer);
     SDL_RenderCopy(renderer, text, nullptr, &bound);
     SDL_DestroyTexture(text);
 }
 
 /*=============================================================================
- * CPU REGISTERS RENDERER
+ * CHR ROM GUI RENDERER
+ *===========================================================================*/
+void Emulator::_init_chr_rom_renderer() {
+    chr_rom_rects[0].x = VIDEO_WIDTH + 10;  chr_rom_rects[1].x = VIDEO_WIDTH + 148;
+    chr_rom_rects[0].y = 40;                chr_rom_rects[1].y = 40;
+    chr_rom_rects[0].w = CHR_ROM_SIZE;      chr_rom_rects[1].w = CHR_ROM_SIZE;
+    chr_rom_rects[0].h = CHR_ROM_SIZE;      chr_rom_rects[1].h = CHR_ROM_SIZE;
+
+    assert(renderer);
+    chr_rom_texts[0] = std::make_shared<Texture>(renderer,
+                            CHR_ROM_SIZE, CHR_ROM_SIZE, chr_rom_rects[0]);
+    chr_rom_texts[1] = std::make_shared<Texture>(renderer,
+                            CHR_ROM_SIZE, CHR_ROM_SIZE, chr_rom_rects[1]);
+}
+
+void Emulator::_render_chr_rom() {
+    for (const auto &text : chr_rom_texts) {
+        text->render_texture();
+    }
+}
+
+/*=============================================================================
+ * CPU REGISTERS GUI RENDERER
  *===========================================================================*/
 void Emulator::_init_regs_renderer() {
     regs_font = TTF_OpenFont(OPEN_SANS_FONT_DIR, 18);
     assert(regs_font);
 
     // A register                           // X register
-    regs_rects[0].x = VIDEO_WIDTH + 10;     regs_rects[1].x = VIDEO_WIDTH + 70;
-    regs_rects[0].y = 30;                   regs_rects[1].y = 30;
+    regs_rects[0].x = VIDEO_WIDTH + 10;     regs_rects[1].x = VIDEO_WIDTH + 80;
+    regs_rects[0].y = 180;                  regs_rects[1].y = 180;
 
     // Y register                           // PC register
-    regs_rects[2].x = VIDEO_WIDTH + 130;    regs_rects[3].x = VIDEO_WIDTH + 10;
-    regs_rects[2].y = 30;                   regs_rects[3].y = 50;
+    regs_rects[2].x = VIDEO_WIDTH + 150;    regs_rects[3].x = VIDEO_WIDTH + 10;
+    regs_rects[2].y = 180;                  regs_rects[3].y = 200;
 
     // STKP registers
-    regs_rects[4].x = VIDEO_WIDTH + 100;
-    regs_rects[4].y = 50;
+    regs_rects[4].x = VIDEO_WIDTH + 110;
+    regs_rects[4].y = 200;
 }
 
 void Emulator::_render_regs() {
     assert(regs_font);
     std::string str;
     str = "A: $"; str += cpu6502::hex_str(cpu.a, 2);
-    _render_str(str, regs_font, WHITE, regs_rects[0]);
+    _render_str(str, regs_font, GREY, regs_rects[0]);
 
     str = "X: $"; str += cpu6502::hex_str(cpu.x, 2);
-    _render_str(str, regs_font, WHITE, regs_rects[1]);
+    _render_str(str, regs_font, GREY, regs_rects[1]);
 
     str = "Y: $"; str += cpu6502::hex_str(cpu.y, 2);
-    _render_str(str, regs_font, WHITE, regs_rects[2]);
+    _render_str(str, regs_font, GREY, regs_rects[2]);
 
     str = "PC: $"; str += cpu6502::hex_str(cpu.pc, 4);
-    _render_str(str, regs_font, WHITE, regs_rects[3]);
+    _render_str(str, regs_font, GREY, regs_rects[3]);
 
     str = "STKP: $"; str += cpu6502::hex_str(cpu.stkp, 4);
-    _render_str(str, regs_font, WHITE, regs_rects[4]);
+    _render_str(str, regs_font, GREY, regs_rects[4]);
 }
 
 /*=============================================================================
- * CPU FLAGS RENDERER
+ * CPU FLAGS GUI RENDERER
  *===========================================================================*/
 void Emulator::_init_flags_renderer() {
     flags_font = TTF_OpenFont(OPEN_SANS_FONT_DIR, 18);
@@ -173,7 +238,7 @@ void Emulator::_init_flags_renderer() {
 void Emulator::_render_flags() {
     assert(flags_font);
     for (int i = 0; i < NUM_FLAGS; ++i) {
-        if (cpu.status & (0x88 >> i))
+        if (cpu.status & (0x80 >> i))
             _render_str(FLAGS_CHAR[i], flags_font, GREEN, flags_rects[i]);
         else
             _render_str(FLAGS_CHAR[i], flags_font, RED, flags_rects[i]);
@@ -181,15 +246,14 @@ void Emulator::_render_flags() {
 }
 
 /*=============================================================================
- * DISASSEMBLED INSTRUCTIONS RENDERER
+ * DISASSEMBLED INSTRUCTIONS GUI RENDERER
  *===========================================================================*/
 void Emulator::_init_disasm_renderer() {
     disasm_font = TTF_OpenFont(OPEN_SANS_FONT_DIR, 14);
     assert(disasm_font);
-
     for (int i = 0; i < NUM_DISASM_INSTR; ++i) {
         disasm_instr_rects[i].x = VIDEO_WIDTH + 10;
-        disasm_instr_rects[i].y = 65 + i * 18;
+        disasm_instr_rects[i].y = 215 + i * 18;
     }
 }
 
@@ -197,13 +261,12 @@ void Emulator::_render_disasm() {
     assert(disasm_font);
     auto it = _disasm_instr_map.find(cpu.pc);
     auto _it = it;
-
     int instr_line_idx = NUM_DISASM_INSTR / 2 - 1;
 
     // Render the previous 10 instructions before the current instruction
     _it--;
     while (_it != _disasm_instr_map.end() && instr_line_idx > 0) {
-        _render_str(_it->second, disasm_font, GREY, disasm_instr_rects[instr_line_idx]);
+        _render_str(_it->second, disasm_font, WHITE, disasm_instr_rects[instr_line_idx]);
         instr_line_idx--;
         _it--;
     }
@@ -217,7 +280,7 @@ void Emulator::_render_disasm() {
     _it = it;
     _it++;
     while (_it != _disasm_instr_map.end() && instr_line_idx < NUM_DISASM_INSTR) {
-        _render_str(_it->second, disasm_font, GREY, disasm_instr_rects[instr_line_idx]);
+        _render_str(_it->second, disasm_font, WHITE, disasm_instr_rects[instr_line_idx]);
         instr_line_idx++;
         _it++;
     }
