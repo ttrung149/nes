@@ -22,11 +22,13 @@ private:
     std::vector<uint8_t> chr_memory_rom;
 
 public:
-    uint8_t read_from_main_bus(uint16_t addr);
-    void write_to_main_bus(uint16_t addr, uint8_t data);
+    // Main bus communication
+    uint8_t handle_cpu_read(uint16_t addr);
+    void handle_cpu_write(uint16_t addr, uint8_t data);
 
-    uint8_t read_from_ppu_bus(uint16_t addr);
-    void write_to_ppu_bus(uint16_t addr, uint8_t data);
+    // PPU bus communication
+    uint8_t handle_ppu_read(uint16_t addr);
+    void handle_ppu_write(uint16_t addr, uint8_t data);
 };
 
 #endif

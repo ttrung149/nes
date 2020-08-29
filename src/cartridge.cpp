@@ -61,13 +61,16 @@ Cartridge::Cartridge(const std::string &nes_file_name) :
 
         ifs.close();
     }
-    else { std::cerr << "ERR: Cannot open file '" << nes_file_name << "'\n"; }
+    else {
+        std::cerr << "ERR: Cannot open file '" << nes_file_name << "'\n";
+        exit(EXIT_FAILURE);
+    }
 }
 
 Cartridge::~Cartridge() {}
 
 
-uint8_t Cartridge::read_from_main_bus(uint16_t addr) {
+uint8_t Cartridge::handle_cpu_read(uint16_t addr) {
     uint16_t mapped_addr = 0;
     if (mapper_ptr->get_cpu_read_mapped_addr(addr, mapped_addr)) {
         return prg_memory_rom[mapped_addr]; 
@@ -75,14 +78,14 @@ uint8_t Cartridge::read_from_main_bus(uint16_t addr) {
     return 0;
 }
 
-void Cartridge::write_to_main_bus(uint16_t addr, uint8_t data) {
+void Cartridge::handle_cpu_write(uint16_t addr, uint8_t data) {
     uint16_t mapped_addr = 0;
     if (mapper_ptr->get_cpu_write_mapped_addr(addr, mapped_addr)) {
         prg_memory_rom[mapped_addr] = data; 
     }
 }
 
-uint8_t Cartridge::read_from_ppu_bus(uint16_t addr) {
+uint8_t Cartridge::handle_ppu_read(uint16_t addr) {
     uint16_t mapped_addr = 0;
     if (mapper_ptr->get_ppu_read_mapped_addr(addr, mapped_addr)) {
         return chr_memory_rom[mapped_addr]; 
@@ -90,7 +93,7 @@ uint8_t Cartridge::read_from_ppu_bus(uint16_t addr) {
     return 0;
 }
 
-void Cartridge::write_to_ppu_bus(uint16_t addr, uint8_t data) {
+void Cartridge::handle_ppu_write(uint16_t addr, uint8_t data) {
     uint16_t mapped_addr = 0;
     if (mapper_ptr->get_ppu_write_mapped_addr(addr, mapped_addr)) {
         chr_memory_rom[mapped_addr] = data; 

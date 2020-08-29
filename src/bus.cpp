@@ -17,6 +17,7 @@ void Bus::connect_to_cartridge(const std::shared_ptr<Cartridge>& _cartridge) {
 }
 
 void Bus::write(uint16_t addr, uint8_t data) {
+    cartridge->handle_cpu_write(addr, data);
 
     // Write to system RAM
     // The 2kB actual memory is mirrored to represent 8kB range
@@ -29,11 +30,10 @@ void Bus::write(uint16_t addr, uint8_t data) {
         assert(ppu);
         ppu->write_to_main_bus(addr & 0x0007, data);
     }
-
 }
 
 uint8_t Bus::read(uint16_t addr, bool read_only) {
-    uint8_t data = 0x00;
+    uint8_t data = cartridge->handle_cpu_read(addr);
 
     // Read from system RAM
     // The 2kB actual memory is mirrored to represent 8kB range
