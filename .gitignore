@@ -5,6 +5,9 @@
 nes
 test-driver
 
+# ROMS
+roms/
+
 # Prerequisites
 *.d
 
