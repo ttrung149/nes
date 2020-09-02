@@ -5,7 +5,8 @@
 # Compiler Flags
 CXX         = g++
 CFLAGS      = -g -std=c++11 -pedantic -Wall -Werror -Wextra \
-              -Wno-overlength-strings -Wfatal-errors -pedantic
+              -Wno-overlength-strings -Wfatal-errors -pedantic \
+			  -Wno-gnu-anonymous-struct
 LDFLAGS     = -lSDL2 -lSDL2_ttf
 RM          = rm -rf
 
@@ -29,7 +30,6 @@ DEPENDS     = $(wildcard obj/*d)
 all: CFLAGS += -O3 -DNDEBUG
 all: $(OBJ_DIR) $(BIN)
 
-debug-build: CFLAGS += -DDEBUG
 debug-build: $(OBJ_DIR) $(BIN) 
 
 $(OBJ_DIR):
