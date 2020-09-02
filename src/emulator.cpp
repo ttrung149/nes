@@ -1,4 +1,5 @@
 #include "emulator.h"
+#include <iostream>
 
 #define OPEN_SANS_FONT_DIR "utils/open-sans.ttf"
 
@@ -17,8 +18,9 @@
 static const char *FLAGS_CHAR[8] = { "N", "V", "_", "B", "D", "I", "Z", "C" };
 #define NUM_FLAGS 8
 #define NUM_REGS 5
-#define NUM_DISASM_INSTR 27
+#define NUM_DISASM_INSTR 25
 #define CHR_ROM_SIZE 128
+#define NUM_PALETTE_SELECTION 8
 
 static const SDL_Color WHITE = { 255, 255, 255, 100 };
 static const SDL_Color GREY  = { 180, 180, 180, 100 };
@@ -38,7 +40,7 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
     ppu.connect_to_bus(&main_bus);
     main_bus.connect_to_ppu(&ppu);
 
-    cartridge = std::make_shared<Cartridge>("roms/nestest.nes");
+    cartridge = std::make_shared<Cartridge>("roms/kung-fu.nes");
     main_bus.connect_to_cartridge(cartridge);
 
     _disasm_instr_map = cpu.disasm(0x0000, 0xFFFF);
@@ -52,7 +54,6 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
     else if (mode == NORMAL_MODE)
         SDL_CreateWindowAndRenderer(VIDEO_WIDTH, VIDEO_HEIGHT, 0, &window, &renderer);
 
-    SDL_SetRenderDrawColor(renderer, 20, 20, 20, 100);
     SDL_RenderClear(renderer);
     TTF_Init();
 }
@@ -62,13 +63,9 @@ Emulator::~Emulator() { stop(); }
 /* Begin emulation */
 void Emulator::begin() {
     _init_video_renderer();
-
-    if (mode == DEBUG_MODE)
-        _init_debugging_gui_renderer();
+    if (mode == DEBUG_MODE) _init_debugging_gui_renderer();
 
     assert(renderer);
-    video_text->update_texture(1000, 255, 0, 0);
-
     while (true) {
         SDL_RenderClear(renderer);
         SDL_PollEvent(&event);
@@ -78,6 +75,18 @@ void Emulator::begin() {
                 switch (event.key.keysym.scancode) {
                     case SDL_SCANCODE_N: {
                         do { cpu.clock(); } while (!cpu.instr_completed());
+                        do { cpu.clock(); } while (cpu.instr_completed());
+                        break;
+                    }
+                    case SDL_SCANCODE_F: {
+                        do { main_bus.clock(); } while (!ppu.frame_completed());
+                        do { main_bus.clock(); } while (!cpu.instr_completed());
+                        ppu.reset_frame();
+                        break;
+                    }
+                    case SDL_SCANCODE_P: {
+                        _curr_palette_selection += 1;
+                        _curr_palette_selection &= 0x07;
                         break;
                     }
                     case SDL_SCANCODE_R: { cpu.reset(); break; }
@@ -90,11 +99,7 @@ void Emulator::begin() {
             default: break;
         }
 
-        _render_flags();
-        _render_regs();
-        _render_disasm();
-        _render_chr_rom();
-
+        _render_debugging_gui();
         _render_video();
 
         SDL_RenderPresent(renderer);
@@ -124,6 +129,7 @@ void Emulator::_init_video_renderer() {
     assert(renderer);
     video_text = std::make_shared<Texture>(renderer,
                             NES_WINDOW_WIDTH, NES_WINDOW_HEIGHT, video_rect);
+    ppu.set_video_texture(video_text);
 }
 
 void Emulator::_render_video() { video_text->render_texture(); }
@@ -135,6 +141,7 @@ void Emulator::_init_debugging_gui_renderer() {
     _init_flags_renderer();
     _init_regs_renderer();
     _init_disasm_renderer();
+    _init_palette_selection_renderer();
     _init_chr_rom_renderer();
 }
 
@@ -142,6 +149,7 @@ void Emulator::_render_debugging_gui() {
     _render_flags();
     _render_regs();
     _render_disasm();
+    _render_palette_selection();
     _render_chr_rom();
 }
 
@@ -162,6 +170,38 @@ void Emulator::_render_str(const std::string &str, TTF_Font *font,
 }
 
 /*=============================================================================
+ * PALETTE SELECTION GUI RENDERER
+ *===========================================================================*/
+void Emulator::_init_palette_selection_renderer() {
+    _curr_palette_selection = 0;
+    assert(renderer);
+    for (uint8_t i = 0; i < NUM_PALETTE_SELECTION; ++i) {
+        palettes_rects[i].x = VIDEO_WIDTH + 10 + 30 * i;
+        palettes_rects[i].y = 175;
+        palettes_rects[i].w = 20;
+        palettes_rects[i].h = 5;
+
+        palettes_texts[i] = std::make_shared<Texture>(renderer, 4, 1, palettes_rects[i]);
+    }
+}
+
+void Emulator::_render_palette_selection() {
+    assert(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderDrawLine(
+        renderer,
+        VIDEO_WIDTH + 10 + 30 * _curr_palette_selection, 188,
+        VIDEO_WIDTH + 10 + 30 * _curr_palette_selection + 20, 188
+    );
+    SDL_SetRenderDrawColor(renderer, 25, 25, 25, 100);
+
+    for (uint8_t i = 0; i < NUM_PALETTE_SELECTION; ++i) {
+        ppu.get_palettes_texture(palettes_texts[i], i);
+        palettes_texts[i]->render_texture();
+    }
+}
+
+/*=============================================================================
  * CHR ROM GUI RENDERER
  *===========================================================================*/
 void Emulator::_init_chr_rom_renderer() {
@@ -178,6 +218,9 @@ void Emulator::_init_chr_rom_renderer() {
 }
 
 void Emulator::_render_chr_rom() {
+    ppu.get_chr_rom_texture(chr_rom_texts[0], 0, _curr_palette_selection);
+    ppu.get_chr_rom_texture(chr_rom_texts[1], 1, _curr_palette_selection);
+
     for (const auto &text : chr_rom_texts) {
         text->render_texture();
     }
@@ -192,15 +235,15 @@ void Emulator::_init_regs_renderer() {
 
     // A register                           // X register
     regs_rects[0].x = VIDEO_WIDTH + 10;     regs_rects[1].x = VIDEO_WIDTH + 80;
-    regs_rects[0].y = 180;                  regs_rects[1].y = 180;
+    regs_rects[0].y = 195;                  regs_rects[1].y = 195;
 
     // Y register                           // PC register
     regs_rects[2].x = VIDEO_WIDTH + 150;    regs_rects[3].x = VIDEO_WIDTH + 10;
-    regs_rects[2].y = 180;                  regs_rects[3].y = 200;
+    regs_rects[2].y = 195;                  regs_rects[3].y = 215;
 
     // STKP registers
     regs_rects[4].x = VIDEO_WIDTH + 110;
-    regs_rects[4].y = 200;
+    regs_rects[4].y = 215;
 }
 
 void Emulator::_render_regs() {
@@ -253,19 +296,24 @@ void Emulator::_init_disasm_renderer() {
     assert(disasm_font);
     for (int i = 0; i < NUM_DISASM_INSTR; ++i) {
         disasm_instr_rects[i].x = VIDEO_WIDTH + 10;
-        disasm_instr_rects[i].y = 215 + i * 18;
+        disasm_instr_rects[i].y = 245 + i * 18;
     }
 }
 
 void Emulator::_render_disasm() {
     assert(disasm_font);
     auto it = _disasm_instr_map.find(cpu.pc);
+    if (it == _disasm_instr_map.end()) {
+        _render_str("Press 'N' to continue", disasm_font, WHITE, disasm_instr_rects[0]);
+        return;
+    }
+
     auto _it = it;
     int instr_line_idx = NUM_DISASM_INSTR / 2 - 1;
 
     // Render the previous 10 instructions before the current instruction
     _it--;
-    while (_it != _disasm_instr_map.end() && instr_line_idx > 0) {
+    while (_it != _disasm_instr_map.end() && instr_line_idx >= 0) {
         _render_str(_it->second, disasm_font, WHITE, disasm_instr_rects[instr_line_idx]);
         instr_line_idx--;
         _it--;
