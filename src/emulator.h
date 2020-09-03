@@ -5,6 +5,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include <map>
+#include <chrono>
 
 #include "bus.h"
 #include "texture.h"
@@ -18,6 +19,12 @@ private:
    cpu6502 cpu;
    ppu2C02 ppu;
    std::shared_ptr<Cartridge> cartridge;
+
+private:
+    std::chrono::time_point<std::chrono::system_clock> _start;
+    bool _is_emulating;
+    void _handle_controller_inputs(SDL_Scancode code);
+    void _handle_debug_inputs(SDL_Scancode code);
 
 /*=============================================================================
  * GUI attributes
@@ -54,7 +61,15 @@ private:
     void _render_str(const std::string &str, TTF_Font *font,
                                         const SDL_Color &col, SDL_Rect &bound);
 
-/* GUI helper: CHR ROM display */
+/* GUI helper: palette selection display */
+private:
+    uint8_t _curr_palette_selection;
+    std::shared_ptr<Texture> palettes_texts[8];
+    SDL_Rect palettes_rects[8];
+    void _init_palette_selection_renderer();
+    void _render_palette_selection();
+
+/* GUI helper: pattern memory (CHR ROM) display */
 private:
     std::shared_ptr<Texture> chr_rom_texts[2];
     SDL_Rect chr_rom_rects[2];
@@ -64,7 +79,7 @@ private:
 /* GUI helper: Disassembler output display */
 private:
     TTF_Font *disasm_font;
-    SDL_Rect disasm_instr_rects[27];
+    SDL_Rect disasm_instr_rects[25];
 
     std::map<uint16_t, std::string>_disasm_instr_map;
     void _init_disasm_renderer();

@@ -1,7 +1,7 @@
 #include "emulator.h"
-#include <iostream>
 
 #define OPEN_SANS_FONT_DIR "utils/open-sans.ttf"
+static const std::chrono::duration<int ,std::micro> REFRESH_PERIOD(16667);
 
 /* NES resolution */
 #define NES_WINDOW_WIDTH 256
@@ -40,7 +40,7 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
     ppu.connect_to_bus(&main_bus);
     main_bus.connect_to_ppu(&ppu);
 
-    cartridge = std::make_shared<Cartridge>("roms/kung-fu.nes");
+    cartridge = std::make_shared<Cartridge>("roms/donkey-kong.nes");
     main_bus.connect_to_cartridge(cartridge);
 
     _disasm_instr_map = cpu.disasm(0x0000, 0xFFFF);
@@ -49,10 +49,14 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
     SDL_Init(SDL_INIT_VIDEO);
 
     // Create window size based on mode
-    if (mode == DEBUG_MODE)
+    if (mode == DEBUG_MODE) {
         SDL_CreateWindowAndRenderer(DEBUG_WIDTH, DEBUG_HEIGHT, 0, &window, &renderer);
-    else if (mode == NORMAL_MODE)
+        _is_emulating = false;
+    }
+    else if (mode == NORMAL_MODE) {
         SDL_CreateWindowAndRenderer(VIDEO_WIDTH, VIDEO_HEIGHT, 0, &window, &renderer);
+        _is_emulating = true;
+    }
 
     SDL_RenderClear(renderer);
     TTF_Init();
@@ -60,48 +64,62 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
 
 Emulator::~Emulator() { stop(); }
 
+void Emulator::_handle_debug_inputs(SDL_Scancode code) {
+    switch (code) {
+        case SDL_SCANCODE_N: {
+            do { cpu.clock(); } while (!cpu.instr_completed());
+            do { cpu.clock(); } while (cpu.instr_completed());
+            break;
+        }
+        case SDL_SCANCODE_F: {
+            do { main_bus.clock(); } while (!ppu.frame_completed());
+            do { main_bus.clock(); } while (!cpu.instr_completed());
+            ppu.reset_frame();
+            break;
+        }
+        case SDL_SCANCODE_P: {
+            _curr_palette_selection += 1;
+            _curr_palette_selection &= 0x07;
+            break;
+        }
+        case SDL_SCANCODE_SPACE: { _is_emulating = !_is_emulating; break; }
+        case SDL_SCANCODE_R: { main_bus.reset(); break; }
+        default: break;
+    }
+}
+
+void Emulator::_handle_controller_inputs(SDL_Scancode code) {
+    (void) code;
+}
+
 /* Begin emulation */
 void Emulator::begin() {
+    using namespace std::chrono;
+
     _init_video_renderer();
     if (mode == DEBUG_MODE) _init_debugging_gui_renderer();
-
     assert(renderer);
+
     while (true) {
-        SDL_RenderClear(renderer);
-        SDL_PollEvent(&event);
-
+        SDL_RenderClear(renderer);  SDL_PollEvent(&event);
         switch (event.type) {
-            case SDL_KEYDOWN: {
-                switch (event.key.keysym.scancode) {
-                    case SDL_SCANCODE_N: {
-                        do { cpu.clock(); } while (!cpu.instr_completed());
-                        do { cpu.clock(); } while (cpu.instr_completed());
-                        break;
-                    }
-                    case SDL_SCANCODE_F: {
-                        do { main_bus.clock(); } while (!ppu.frame_completed());
-                        do { main_bus.clock(); } while (!cpu.instr_completed());
-                        ppu.reset_frame();
-                        break;
-                    }
-                    case SDL_SCANCODE_P: {
-                        _curr_palette_selection += 1;
-                        _curr_palette_selection &= 0x07;
-                        break;
-                    }
-                    case SDL_SCANCODE_R: { cpu.reset(); break; }
-                    default: break;
-                }
+            case SDL_KEYDOWN:
+                _handle_controller_inputs(event.key.keysym.scancode);
+                if (mode == DEBUG_MODE)
+                    _handle_debug_inputs(event.key.keysym.scancode);
                 break;
-            }
-
-            case SDL_QUIT: { stop(); return; }
-            default: break;
+            case SDL_QUIT: stop();
+                return;
         }
 
-        _render_debugging_gui();
-        _render_video();
+        if (_is_emulating && system_clock::now() - _start > REFRESH_PERIOD) {
+            do { main_bus.clock(); } while (!ppu.frame_completed());
+            ppu.reset_frame();
+            _start = system_clock::now();
+        }
 
+        if (mode == DEBUG_MODE) _render_debugging_gui();
+        _render_video();
         SDL_RenderPresent(renderer);
     }
 }
@@ -221,9 +239,7 @@ void Emulator::_render_chr_rom() {
     ppu.get_chr_rom_texture(chr_rom_texts[0], 0, _curr_palette_selection);
     ppu.get_chr_rom_texture(chr_rom_texts[1], 1, _curr_palette_selection);
 
-    for (const auto &text : chr_rom_texts) {
-        text->render_texture();
-    }
+    for (const auto &text : chr_rom_texts) text->render_texture();
 }
 
 /*=============================================================================
@@ -333,4 +349,3 @@ void Emulator::_render_disasm() {
         _it++;
     }
 }
-
