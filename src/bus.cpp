@@ -19,14 +19,14 @@ void Bus::connect_to_cartridge(const std::shared_ptr<Cartridge>& _cartridge) {
 void Bus::write(uint16_t addr, uint8_t data) {
     cartridge->handle_cpu_write(addr, data);
 
-    // Write to system RAM
+    // Write to main bus RAM
     // The 2kB actual memory is mirrored to represent 8kB range
     if (addr >= SYSTEM_RAM_ADDR_LOWER && addr <= SYSTEM_RAM_ADDR_UPPER) {
 	    cpu_ram[addr & 0x07FF] = data;
     }
 
-    // Write to PPU
-    else if (addr >= PPU_ADDR_LOWER && addr <= PPU_ADDR_UPPER) {
+    // Write to PPU address range
+    else if (addr >= SYSTEM_PPU_ADDR_LOWER && addr <= SYSTEM_PPU_ADDR_UPPER) {
         assert(ppu);
         ppu->write_to_main_bus(addr & 0x0007, data);
     }
@@ -35,14 +35,14 @@ void Bus::write(uint16_t addr, uint8_t data) {
 uint8_t Bus::read(uint16_t addr, bool read_only) {
     uint8_t data = cartridge->handle_cpu_read(addr);
 
-    // Read from system RAM
+    // Read from main bus RAM
     // The 2kB actual memory is mirrored to represent 8kB range
     if (addr >= SYSTEM_RAM_ADDR_LOWER && addr <= SYSTEM_RAM_ADDR_UPPER) {
 	    data = cpu_ram[addr & 0x07FF];
     }
 
-    // Read from PPU
-    else if (addr >= PPU_ADDR_LOWER && addr <= PPU_ADDR_UPPER) {
+    // Read from PPU address range
+    else if (addr >= SYSTEM_PPU_ADDR_LOWER && addr <= SYSTEM_PPU_ADDR_UPPER) {
         assert(ppu);
         data = ppu->read_from_main_bus(addr & 0x0007, read_only);
     }
@@ -53,10 +53,13 @@ uint8_t Bus::read(uint16_t addr, bool read_only) {
 void Bus::clock() {
     assert(ppu); ppu->clock();
     assert(cpu); if (clock_cycles % 3 == 0) cpu->clock();
+
+    if (ppu->nmi()) { cpu->nmi(); ppu->reset_nmi(); }
     clock_cycles++;
 }
 
 void Bus::reset() {
     assert(cpu != nullptr); cpu->reset();
+    assert(ppu != nullptr); ppu->reset();
     clock_cycles = 0;
 }
