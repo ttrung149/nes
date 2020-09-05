@@ -7,9 +7,6 @@
 #include "cartridge.h"
 
 class Bus {
-private:
-    uint32_t clock_cycles;
-
 public:
     Bus();
     ~Bus();
@@ -33,6 +30,12 @@ public:
 
 public:
     uint8_t cpu_ram[_2_KB];
+    uint8_t controller[2];
+
+private:
+    uint32_t clock_cycles;
+    uint8_t controller_states[2];
+
 };
 
 #endif

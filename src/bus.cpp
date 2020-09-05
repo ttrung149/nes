@@ -1,6 +1,6 @@
 #include "bus.h"
 
-Bus::Bus() : clock_cycles(0), cpu(nullptr), ppu(nullptr) {
+Bus::Bus() : cpu(nullptr), ppu(nullptr), clock_cycles(0) {
     for (auto &byte : cpu_ram) byte = 0x00;
 }
 
@@ -30,6 +30,11 @@ void Bus::write(uint16_t addr, uint8_t data) {
         assert(ppu);
         ppu->write_to_main_bus(addr & 0x0007, data);
     }
+
+    // Write to controller address range
+    else if (addr >= CONTROLLER_ADDR_LOWER && addr <= CONTROLLER_ADDR_UPPER) {
+        controller_states[addr & 0x0001] = controller[addr & 0x0001];
+    }
 }
 
 uint8_t Bus::read(uint16_t addr, bool read_only) {
@@ -47,7 +52,12 @@ uint8_t Bus::read(uint16_t addr, bool read_only) {
         data = ppu->read_from_main_bus(addr & 0x0007, read_only);
     }
 
-	return data;
+    // Read from controller address range
+    else if (addr >= CONTROLLER_ADDR_LOWER && addr <= CONTROLLER_ADDR_UPPER) {
+        data = (controller_states[addr & 0x0001] & 0x80) > 0;
+        controller_states[addr & 0x0001] <<= 1;
+    }
+    return data;
 }
 
 void Bus::clock() {

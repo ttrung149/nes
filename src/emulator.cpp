@@ -40,7 +40,7 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
     ppu.connect_to_bus(&main_bus);
     main_bus.connect_to_ppu(&ppu);
 
-    cartridge = std::make_shared<Cartridge>("roms/donkey-kong.nes");
+    cartridge = std::make_shared<Cartridge>("roms/nestest.nes");
     main_bus.connect_to_cartridge(cartridge);
 
     _disasm_instr_map = cpu.disasm(0x0000, 0xFFFF);
@@ -89,7 +89,32 @@ void Emulator::_handle_debug_inputs(SDL_Scancode code) {
 }
 
 void Emulator::_handle_controller_inputs(SDL_Scancode code) {
-    (void) code;
+    switch (code) {
+        // First controller: up, left, down, right
+        case SDL_SCANCODE_W:        main_bus.controller[0] |= 0x08; break;
+        case SDL_SCANCODE_A:        main_bus.controller[0] |= 0x02; break;
+        case SDL_SCANCODE_S:        main_bus.controller[0] |= 0x04; break;
+        case SDL_SCANCODE_D:        main_bus.controller[0] |= 0x01; break;
+
+        // First controller: A, B, Select, Start
+        case SDL_SCANCODE_Q:        main_bus.controller[0] |= 0x80; break;
+        case SDL_SCANCODE_E:        main_bus.controller[0] |= 0x40; break;
+        case SDL_SCANCODE_LSHIFT:   main_bus.controller[0] |= 0x20; break;
+        case SDL_SCANCODE_RETURN:   main_bus.controller[0] |= 0x10; break;
+
+        // Second controller: up, left, down, right
+        case SDL_SCANCODE_UP:       main_bus.controller[1] |= 0x08; break;
+        case SDL_SCANCODE_LEFT:     main_bus.controller[1] |= 0x02; break;
+        case SDL_SCANCODE_DOWN:     main_bus.controller[1] |= 0x04; break;
+        case SDL_SCANCODE_RIGHT:    main_bus.controller[1] |= 0x01; break;
+
+        // Second controller: A, B, Select, Start
+        case SDL_SCANCODE_O:        main_bus.controller[1] |= 0x80; break;
+        case SDL_SCANCODE_P:        main_bus.controller[1] |= 0x40; break;
+        case SDL_SCANCODE_U:        main_bus.controller[1] |= 0x20; break;
+        case SDL_SCANCODE_I:        main_bus.controller[1] |= 0x10; break;
+        default: break;
+    }
 }
 
 /* Begin emulation */
@@ -107,6 +132,10 @@ void Emulator::begin() {
                 _handle_controller_inputs(event.key.keysym.scancode);
                 if (mode == DEBUG_MODE)
                     _handle_debug_inputs(event.key.keysym.scancode);
+                break;
+            case SDL_KEYUP:
+                main_bus.controller[0] = 0x00;
+                main_bus.controller[1] = 0x00;
                 break;
             case SDL_QUIT: stop();
                 return;
