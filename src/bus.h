@@ -36,6 +36,14 @@ private:
     uint32_t clock_cycles;
     uint8_t controller_states[2];
 
+// OAM DMA
+private:
+    uint8_t dma_page = 0x00;
+	uint8_t dma_addr = 0x00;
+	uint8_t dma_data = 0x00;
+
+    bool dma_idle = true;       // Delay CPU clock cycle to sync up DMA process
+    bool dma_transfer = false;  // Indicates whether DMA transfer is happening
 };
 
 #endif

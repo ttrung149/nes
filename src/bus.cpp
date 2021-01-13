@@ -2,6 +2,10 @@
 
 Bus::Bus() : cpu(nullptr), ppu(nullptr), clock_cycles(0) {
     for (auto &byte : cpu_ram) byte = 0x00;
+
+    // Reset controller states
+    controller_states[0] = 0x00;
+    controller_states[1] = 0x00;
 }
 
 Bus::~Bus() {}
@@ -29,6 +33,13 @@ void Bus::write(uint16_t addr, uint8_t data) {
     else if (addr >= SYSTEM_PPU_ADDR_LOWER && addr <= SYSTEM_PPU_ADDR_UPPER) {
         assert(ppu);
         ppu->write_to_main_bus(addr & 0x0007, data);
+    }
+
+    // Kicks off DMA to OAM memory
+    else if (addr == OAM_ADDR) {
+        dma_transfer = true;
+        dma_page = data;
+        dma_addr = 0x00;
     }
 
     // Write to controller address range
@@ -62,7 +73,37 @@ uint8_t Bus::read(uint16_t addr, bool read_only) {
 
 void Bus::clock() {
     assert(ppu); ppu->clock();
-    assert(cpu); if (clock_cycles % 3 == 0) cpu->clock();
+    assert(cpu);
+
+    if (clock_cycles % 3 == 0) {
+        // Stops bus clock to handle DMA transfer to OAM memory
+        if (dma_transfer) {
+            if (dma_idle) {
+                if (clock_cycles % 2 == 1) dma_idle = false;
+            }
+            else {
+                if (clock_cycles % 2 == 0) {
+                    dma_data = read(dma_page << 8 | dma_addr, false);
+                }
+                else {
+                    ppu->oam_ptr[dma_addr] = dma_data;
+                    dma_addr++;
+
+                    // DMA is done when 256 bytes have been written or when
+                    // dma_addr rolls back to 0
+                    if (dma_addr == 0x00) {
+                        dma_transfer = false;
+                        dma_idle = true;
+                    }
+                }
+            }
+        }
+
+        // Non-DMA process
+        else {
+            cpu->clock();
+        }
+    }
 
     if (ppu->nmi()) { cpu->nmi(); ppu->reset_nmi(); }
     clock_cycles++;
@@ -72,4 +113,11 @@ void Bus::reset() {
     assert(cpu != nullptr); cpu->reset();
     assert(ppu != nullptr); ppu->reset();
     clock_cycles = 0;
+
+    // Reset OAM DMA
+    dma_page = 0x00;
+	dma_addr = 0x00;
+	dma_data = 0x00;
+	dma_idle = true;
+	dma_transfer = false;
 }
