@@ -2,7 +2,7 @@
 #include "mem.h"
 #include "cartridge.h"
 
-Cartridge::Cartridge(const std::string &nes_file_name) :
+Cartridge::Cartridge(const char *nes_file_name) :
     mapper_id(0), num_prg_banks(0), num_chr_banks(0)
 {
     struct __attribute__((__packed__)) {
@@ -17,6 +17,7 @@ Cartridge::Cartridge(const std::string &nes_file_name) :
         uint8_t unused[5];
     } header;
 
+    assert(nes_file_name);
     std::ifstream ifs;
     ifs.open(nes_file_name, std::ifstream::binary);
 

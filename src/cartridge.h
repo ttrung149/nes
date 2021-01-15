@@ -6,8 +6,8 @@
 #include "mapper_0.h"
 
 class Cartridge {
-public:	
-    Cartridge(const std::string &nes_file_name);
+public:
+    Cartridge(const char *nes_file_name);
     ~Cartridge();
 
     enum MIRROR { HORIZONTAL, VERTICAL, ONESCREEN_LO, ONESCREEN_HI } mirror;
