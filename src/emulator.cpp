@@ -1,7 +1,7 @@
 #include "emulator.h"
 
 #define OPEN_SANS_FONT_DIR "utils/open-sans.ttf"
-static const std::chrono::duration<int ,std::micro> REFRESH_PERIOD(16667);
+static const std::chrono::duration<int, std::micro> REFRESH_PERIOD(12000);
 
 /* NES resolution */
 #define NES_WINDOW_WIDTH 256
@@ -31,7 +31,7 @@ static const SDL_Color GREEN = { 0, 255, 0, 100 };
 /*=============================================================================
  * EMULATOR METHODS
  *===========================================================================*/
-Emulator::Emulator(Emulator::MODE m) : mode(m) {
+Emulator::Emulator(Emulator::MODE m, const char *nes_file) : mode(m) {
 
     // Create bus connection
     cpu.connect_to_bus(&main_bus);
@@ -40,16 +40,16 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
     ppu.connect_to_bus(&main_bus);
     main_bus.connect_to_ppu(&ppu);
 
-    cartridge = std::make_shared<Cartridge>("roms/nestest.nes");
+    cartridge = std::make_shared<Cartridge>(nes_file);
     main_bus.connect_to_cartridge(cartridge);
 
-    _disasm_instr_map = cpu.disasm(0x0000, 0xFFFF);
     cpu.reset();
 
     SDL_Init(SDL_INIT_VIDEO);
 
     // Create window size based on mode
     if (mode == DEBUG_MODE) {
+        _disasm_instr_map = cpu.disasm(0x0000, 0xFFFF);
         SDL_CreateWindowAndRenderer(DEBUG_WIDTH, DEBUG_HEIGHT, 0, &window, &renderer);
         _is_emulating = false;
     }
@@ -64,56 +64,90 @@ Emulator::Emulator(Emulator::MODE m) : mode(m) {
 
 Emulator::~Emulator() { stop(); }
 
-void Emulator::_handle_debug_inputs(SDL_Scancode code) {
-    switch (code) {
-        case SDL_SCANCODE_N: {
-            do { cpu.clock(); } while (!cpu.instr_completed());
-            do { cpu.clock(); } while (cpu.instr_completed());
-            break;
+void Emulator::_handle_debug_inputs() {
+    SDL_Scancode code = event.key.keysym.scancode;
+    if (event.type == SDL_KEYDOWN) {
+        switch (code) {
+            case SDL_SCANCODE_N: {
+                do { cpu.clock(); } while (!cpu.instr_completed());
+                do { cpu.clock(); } while (cpu.instr_completed());
+                break;
+            }
+            case SDL_SCANCODE_F: {
+                do { main_bus.clock(); } while (!ppu.frame_completed());
+                do { main_bus.clock(); } while (!cpu.instr_completed());
+                ppu.reset_frame();
+                break;
+            }
+            case SDL_SCANCODE_P: {
+                _curr_palette_selection += 1;
+                _curr_palette_selection &= 0x07;
+                break;
+            }
+            case SDL_SCANCODE_SPACE: { _is_emulating = !_is_emulating; break; }
+            case SDL_SCANCODE_R: { main_bus.reset(); break; }
+            default: break;
         }
-        case SDL_SCANCODE_F: {
-            do { main_bus.clock(); } while (!ppu.frame_completed());
-            do { main_bus.clock(); } while (!cpu.instr_completed());
-            ppu.reset_frame();
-            break;
-        }
-        case SDL_SCANCODE_P: {
-            _curr_palette_selection += 1;
-            _curr_palette_selection &= 0x07;
-            break;
-        }
-        case SDL_SCANCODE_SPACE: { _is_emulating = !_is_emulating; break; }
-        case SDL_SCANCODE_R: { main_bus.reset(); break; }
-        default: break;
     }
 }
 
-void Emulator::_handle_controller_inputs(SDL_Scancode code) {
-    switch (code) {
-        // First controller: up, left, down, right
-        case SDL_SCANCODE_W:        main_bus.controller[0] |= 0x08; break;
-        case SDL_SCANCODE_A:        main_bus.controller[0] |= 0x02; break;
-        case SDL_SCANCODE_S:        main_bus.controller[0] |= 0x04; break;
-        case SDL_SCANCODE_D:        main_bus.controller[0] |= 0x01; break;
+void Emulator::_handle_controller_inputs() {
+    SDL_Scancode code = event.key.keysym.scancode;
+    if (event.type == SDL_KEYDOWN) {
+        switch (code) {
+            // First controller: up, left, down, right
+            case SDL_SCANCODE_W:        main_bus.controller[0] |= 0x08; break;
+            case SDL_SCANCODE_A:        main_bus.controller[0] |= 0x02; break;
+            case SDL_SCANCODE_S:        main_bus.controller[0] |= 0x04; break;
+            case SDL_SCANCODE_D:        main_bus.controller[0] |= 0x01; break;
 
-        // First controller: A, B, Select, Start
-        case SDL_SCANCODE_Q:        main_bus.controller[0] |= 0x80; break;
-        case SDL_SCANCODE_E:        main_bus.controller[0] |= 0x40; break;
-        case SDL_SCANCODE_LSHIFT:   main_bus.controller[0] |= 0x20; break;
-        case SDL_SCANCODE_RETURN:   main_bus.controller[0] |= 0x10; break;
+            // First controller: A, B, Select, Start
+            case SDL_SCANCODE_T:        main_bus.controller[0] |= 0x80; break;
+            case SDL_SCANCODE_Y:        main_bus.controller[0] |= 0x40; break;
+            case SDL_SCANCODE_LSHIFT:   main_bus.controller[0] |= 0x20; break;
+            case SDL_SCANCODE_RETURN:   main_bus.controller[0] |= 0x10; break;
 
-        // Second controller: up, left, down, right
-        case SDL_SCANCODE_UP:       main_bus.controller[1] |= 0x08; break;
-        case SDL_SCANCODE_LEFT:     main_bus.controller[1] |= 0x02; break;
-        case SDL_SCANCODE_DOWN:     main_bus.controller[1] |= 0x04; break;
-        case SDL_SCANCODE_RIGHT:    main_bus.controller[1] |= 0x01; break;
+            // Second controller: up, left, down, right
+            case SDL_SCANCODE_UP:       main_bus.controller[1] |= 0x08; break;
+            case SDL_SCANCODE_LEFT:     main_bus.controller[1] |= 0x02; break;
+            case SDL_SCANCODE_DOWN:     main_bus.controller[1] |= 0x04; break;
+            case SDL_SCANCODE_RIGHT:    main_bus.controller[1] |= 0x01; break;
 
-        // Second controller: A, B, Select, Start
-        case SDL_SCANCODE_O:        main_bus.controller[1] |= 0x80; break;
-        case SDL_SCANCODE_P:        main_bus.controller[1] |= 0x40; break;
-        case SDL_SCANCODE_U:        main_bus.controller[1] |= 0x20; break;
-        case SDL_SCANCODE_I:        main_bus.controller[1] |= 0x10; break;
-        default: break;
+            // Second controller: A, B, Select, Start
+            case SDL_SCANCODE_H:        main_bus.controller[1] |= 0x80; break;
+            case SDL_SCANCODE_J:        main_bus.controller[1] |= 0x40; break;
+            case SDL_SCANCODE_K:        main_bus.controller[1] |= 0x20; break;
+            case SDL_SCANCODE_L:        main_bus.controller[1] |= 0x10; break;
+            default: break;
+        }
+    }
+    else if (event.type == SDL_KEYUP) {
+        switch (code) {
+            // First controller: up, left, down, right
+            case SDL_SCANCODE_W:        main_bus.controller[0] &= ~0x08; break;
+            case SDL_SCANCODE_A:        main_bus.controller[0] &= ~0x02; break;
+            case SDL_SCANCODE_S:        main_bus.controller[0] &= ~0x04; break;
+            case SDL_SCANCODE_D:        main_bus.controller[0] &= ~0x01; break;
+
+            // First controller: A, B, Select, Start
+            case SDL_SCANCODE_T:        main_bus.controller[0] &= ~0x80; break;
+            case SDL_SCANCODE_Y:        main_bus.controller[0] &= ~0x40; break;
+            case SDL_SCANCODE_LSHIFT:   main_bus.controller[0] &= ~0x20; break;
+            case SDL_SCANCODE_RETURN:   main_bus.controller[0] &= ~0x10; break;
+
+            // Second controller: up, left, down, right
+            case SDL_SCANCODE_UP:       main_bus.controller[1] &= ~0x08; break;
+            case SDL_SCANCODE_LEFT:     main_bus.controller[1] &= ~0x02; break;
+            case SDL_SCANCODE_DOWN:     main_bus.controller[1] &= ~0x04; break;
+            case SDL_SCANCODE_RIGHT:    main_bus.controller[1] &= ~0x01; break;
+
+            // Second controller: A, B, Select, Start
+            case SDL_SCANCODE_H:        main_bus.controller[1] &= ~0x80; break;
+            case SDL_SCANCODE_J:        main_bus.controller[1] &= ~0x40; break;
+            case SDL_SCANCODE_K:        main_bus.controller[1] &= ~0x20; break;
+            case SDL_SCANCODE_L:        main_bus.controller[1] &= ~0x10; break;
+            default: break;
+        }
     }
 }
 
@@ -126,20 +160,12 @@ void Emulator::begin() {
     assert(renderer);
 
     while (true) {
-        SDL_RenderClear(renderer);  SDL_PollEvent(&event);
-        switch (event.type) {
-            case SDL_KEYDOWN:
-                _handle_controller_inputs(event.key.keysym.scancode);
-                if (mode == DEBUG_MODE)
-                    _handle_debug_inputs(event.key.keysym.scancode);
-                break;
-            case SDL_KEYUP:
-                main_bus.controller[0] = 0x00;
-                main_bus.controller[1] = 0x00;
-                break;
-            case SDL_QUIT: stop();
-                return;
-        }
+        SDL_RenderClear(renderer);
+        SDL_PollEvent(&event);
+
+        _handle_controller_inputs();
+        if (mode == DEBUG_MODE) _handle_debug_inputs();
+        if (event.type == SDL_QUIT) { stop(); return; }
 
         if (_is_emulating && system_clock::now() - _start > REFRESH_PERIOD) {
             do { main_bus.clock(); } while (!ppu.frame_completed());
@@ -179,7 +205,10 @@ void Emulator::_init_video_renderer() {
     ppu.set_video_texture(video_text);
 }
 
-void Emulator::_render_video() { video_text->render_texture(); }
+void Emulator::_render_video() {
+    assert(video_text);
+    video_text->render_texture();
+}
 
 /*=============================================================================
  * DEBUGGING GUI HELPERS

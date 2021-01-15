@@ -23,8 +23,8 @@ private:
 private:
     std::chrono::time_point<std::chrono::system_clock> _start;
     bool _is_emulating;
-    void _handle_controller_inputs(SDL_Scancode code);
-    void _handle_debug_inputs(SDL_Scancode code);
+    void _handle_controller_inputs();
+    void _handle_debug_inputs();
 
 /*=============================================================================
  * GUI attributes
@@ -43,7 +43,7 @@ private:
 
 /* Emulator methods */
 public:
-    Emulator(MODE m);
+    Emulator(MODE m, const char *nes_file);
     ~Emulator();
 
     void begin();
