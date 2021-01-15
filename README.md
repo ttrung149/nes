@@ -27,6 +27,7 @@ After creating the binary from source run `./nes` to see the help menu. Run `./n
 Some screenshots
 
 Donkey-kong
+<br/>
 <img src="utils/donkey-kong.png" width="80%">
 
 Classic SMB + debugging interface
