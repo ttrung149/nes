@@ -24,8 +24,8 @@ After creating the binary from source run `./nes` to see the help menu. Run `./n
 
 Some screenshots
 
-<img src="utils/donkey-kong.png" width="50%">
-<img src="utils/smb.png" width="50%">.
+<img src="utils/donkey-kong.png" width="80%">
+<img src="utils/smb.png" width="80%">
 
 ## Authors
 
