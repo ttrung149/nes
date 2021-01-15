@@ -19,6 +19,9 @@ public:
     void connect_to_cartridge(const std::shared_ptr<Cartridge>& _cartridge);
     void reset();
 
+/*=============================================================================
+ * GUI HELPERS
+ *===========================================================================*/
 /* GUI helpers - used in 'Emulator' class to render video */
 public:
     const SDL_Color &get_palette_from_offsets(uint8_t idx, uint8_t palette);
@@ -79,8 +82,7 @@ private:
         };
     } control_register;
 
-/* PPU "Loopy" Register - (name tables) */
-private:
+    /* PPU "Loopy" Register - (name tables) */
     union loopy_register {
         uint16_t reg = 0x0000;
         struct __attribute__((__packed__)) {
@@ -95,13 +97,42 @@ private:
 
     loopy_register vram_addr;   // "pointer" address into name table
     loopy_register tram_addr;   // "temp" address into name table
+
+    /* OAM Entry - internal memory to PPU storing sprites */
+    struct OAMEntry {
+        uint8_t y;
+        uint8_t id;
+        uint8_t attr;
+        uint8_t x;
+    } oam[64];
+
+/* PPU foreground rendering helpers */
+private:
+    uint8_t oam_addr = 0x00;
+
+    OAMEntry sprite_scanline[8];
+    uint8_t _sprite_count;
+    uint8_t _sprite_shifter_pattern_lo[8];
+    uint8_t _sprite_shifter_pattern_hi[8];
+
+    // Sprite zero collision flags
+    bool _sprite_zero_hit = false;
+    bool _sprite_zero_rendered = false;
+
+    void _render_fg();
+
+public:
+    uint8_t *oam_ptr = (uint8_t *)oam;
+
+/* PPU background rendering helpers */
+private:
     uint8_t _fine_x = 0x00;     // Horizontal pixel offset
 
     // Background rendering attributes
-    uint8_t  _bg_next_tile_id     = 0x00;
-    uint8_t	 _bg_next_tile_attrib = 0x00;
-    uint8_t  _bg_next_tile_lsb    = 0x00;
-    uint8_t  _bg_next_tile_msb    = 0x00;
+    uint8_t   _bg_next_tile_id     = 0x00;
+    uint8_t   _bg_next_tile_attrib = 0x00;
+    uint8_t   _bg_next_tile_lsb    = 0x00;
+    uint8_t   _bg_next_tile_msb    = 0x00;
 
     uint16_t  _bg_shifter_pattern_lo = 0x0000;
     uint16_t  _bg_shifter_pattern_hi = 0x0000;
@@ -111,8 +142,6 @@ private:
     uint8_t _address_latch = 0x00;
     uint8_t _ppu_data_buffer = 0x00;
 
-/* PPU background rendering helpers */
-private:
     void _increment_scroll_x();
     void _increment_scroll_y();
     void _transfer_address_x();
@@ -120,9 +149,14 @@ private:
     void _load_bg_shifters();
     void _update_shifters();
 
-/* PPU RAM */
+    void _render_bg();
+
+/*=============================================================================
+ * PPU RAM
+ *===========================================================================*/
 private:
     uint8_t ppu_name_table[2][_1_KB];
+    //uint8_t ppu_pattern_table[2][_4_KB];
     uint8_t ppu_palette_table[32];
 
     int16_t _scan_line;
@@ -133,7 +167,9 @@ public:
     bool frame_completed();
     void reset_frame();
 
-/* Bus communications */
+/*=============================================================================
+ * BUS COMMUNICATION
+ *===========================================================================*/
 public:
     uint8_t read_from_main_bus(uint16_t addr, bool read_only);
     void write_to_main_bus(uint16_t addr, uint8_t data);

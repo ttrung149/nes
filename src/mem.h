@@ -9,7 +9,7 @@
 #define _16_KB 16384
 
 #define RESET_PC 0xFFFC
-#define RESET_STKP 0xFD 
+#define RESET_STKP 0xFD
 #define BASE_STKP 0x0100
 
 #define IRQ_PC 0xFFFE
@@ -33,5 +33,8 @@
 
 #define CONTROLLER_ADDR_LOWER 0x4016
 #define CONTROLLER_ADDR_UPPER 0x4017
+
+/* OAM */
+#define OAM_ADDR 0x4014
 
 #endif
