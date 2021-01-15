@@ -27,7 +27,7 @@ DEPENDS     = $(wildcard obj/*d)
 #------------------------------------------------------------------------------
 # Make instructions
 #------------------------------------------------------------------------------
-all: CFLAGS += -O3 -DNDEBUG
+all: CFLAGS += -DNDEBUG
 all: $(OBJ_DIR) $(BIN)
 
 debug-build: $(OBJ_DIR) $(BIN) 
