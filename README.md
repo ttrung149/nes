@@ -1,8 +1,10 @@
 # nes
 
-Another NES emulator
+Another NES emulator using C++11 and SDL2
 
 ## Installing
+
+This project uses `SDL2` to render graphics. Please have `SDL2` installed before compiling the emulator.
 
 Clone the repository. Change directory to root folder and create the binary using
 
@@ -24,7 +26,10 @@ After creating the binary from source run `./nes` to see the help menu. Run `./n
 
 Some screenshots
 
+Donkey-kong
 <img src="utils/donkey-kong.png" width="80%">
+
+Classic SMB + debugging interface
 <img src="utils/smb.png" width="80%">
 
 ## Authors
